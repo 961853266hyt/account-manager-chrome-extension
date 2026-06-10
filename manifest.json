@@ -1,0 +1,12 @@
+{
+  "manifest_version": 3,
+  "name": "账号切换助手",
+  "version": "1.0.0",
+  "description": "同一域名下多账号一键切换，基于 Cookie 保存与恢复",
+  "permissions": ["cookies", "storage", "tabs"],
+  "host_permissions": ["<all_urls>"],
+  "action": {
+    "default_popup": "src/popup/index.html",
+    "default_title": "账号切换助手"
+  }
+}

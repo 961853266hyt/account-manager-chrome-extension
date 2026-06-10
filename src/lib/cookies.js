@@ -1,0 +1,80 @@
+// 根据 cookie 自身的 domain/path/secure 还原出可用于 set/remove 的 URL
+function cookieUrl(cookie) {
+  const host = cookie.domain.startsWith('.') ? cookie.domain.slice(1) : cookie.domain
+  return `${cookie.secure ? 'https' : 'http'}://${host}${cookie.path}`
+}
+
+/**
+ * 判断某 Cookie 名是否落在配置的「要管理」名单内。
+ * - patterns 为空 / 未配置：返回 true（管理全部，向后兼容）
+ * - 支持 `前缀*` 通配，如 `__Secure-*`
+ */
+export function matchCookieName(name, patterns) {
+  if (!patterns || patterns.length === 0) return true
+  return patterns.some((p) =>
+    p.endsWith('*') ? name.startsWith(p.slice(0, -1)) : name === p,
+  )
+}
+
+/** 读取主域名下的 Cookie（含各子域名、HttpOnly），按 patterns 过滤 */
+export async function getDomainCookies(rootDomain, patterns) {
+  const all = await chrome.cookies.getAll({ domain: rootDomain })
+  return all.filter((c) => matchCookieName(c.name, patterns))
+}
+
+/** 删除指定的一组 Cookie */
+export async function removeCookies(cookies) {
+  await Promise.all(
+    cookies.map((c) =>
+      chrome.cookies
+        .remove({ url: cookieUrl(c), name: c.name, storeId: c.storeId })
+        .catch(() => {}),
+    ),
+  )
+}
+
+/**
+ * 写回一组 Cookie。返回写入失败的数量（个别 Cookie 因 __Host- 前缀、
+ * sameSite 限制等原因可能失败，不影响整体）。
+ */
+export async function restoreCookies(cookies) {
+  let failed = 0
+  for (const c of cookies) {
+    const details = {
+      url: cookieUrl(c),
+      name: c.name,
+      value: c.value,
+      path: c.path,
+      secure: c.secure,
+      httpOnly: c.httpOnly,
+      storeId: c.storeId,
+    }
+    // hostOnly 的 Cookie 不能显式传 domain，否则会变成带点的 domain cookie
+    if (!c.hostOnly) details.domain = c.domain
+    // 会话 Cookie 不传 expirationDate
+    if (!c.session && c.expirationDate) details.expirationDate = c.expirationDate
+    if (c.sameSite && c.sameSite !== 'unspecified') details.sameSite = c.sameSite
+    try {
+      await chrome.cookies.set(details)
+    } catch (e) {
+      failed += 1
+      console.warn('写入 Cookie 失败:', c.name, e)
+    }
+  }
+  return failed
+}
+
+/**
+ * 切换到目标账号：只清除「受管理」的 Cookie，再写回目标账号的 Cookie，
+ * 不会动域名下其它无关 Cookie（分析/追踪等）。返回写入失败数量。
+ */
+export async function applyAccount(rootDomain, targetCookies, patterns) {
+  const current = await chrome.cookies.getAll({ domain: rootDomain })
+  const targetNames = new Set(targetCookies.map((c) => c.name))
+  // 清除：当前命中 patterns 的，或目标账号里存在的同名 Cookie（防配置漂移残留）
+  const toRemove = current.filter(
+    (c) => matchCookieName(c.name, patterns) || targetNames.has(c.name),
+  )
+  await removeCookies(toRemove)
+  return restoreCookies(targetCookies)
+}
