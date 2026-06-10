@@ -1,8 +1,10 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { getActiveTabDomain } from '../lib/domain'
+import { getActiveTab } from '../lib/domain'
 import { getDomainCookies, applyAccount } from '../lib/cookies'
-import { getDomainConfig } from '../lib/domain-config'
+import { getDomainConfig, getAllConfigs } from '../lib/domain-config'
+import { bestMatch, queryDomain } from '../lib/pattern'
 import {
+  getAllAccounts,
   getAccountsForDomain,
   saveAccount,
   updateAccountCookies,
@@ -15,30 +17,42 @@ import CookieSettings from './CookieSettings'
 
 export default function App() {
   const [tab, setTab] = useState(null)
-  const [domain, setDomain] = useState(null)
+  const [host, setHost] = useState(null)
+  const [root, setRoot] = useState(null)
+  const [scope, setScope] = useState('') // 当前作用域通配模式
+  const [scopeInput, setScopeInput] = useState('')
   const [config, setConfig] = useState(null) // { cookieNames } | null
   const [accounts, setAccounts] = useState([])
   const [newName, setNewName] = useState('')
   const [busy, setBusy] = useState(false)
   const [showSettings, setShowSettings] = useState(false)
-  const [message, setMessage] = useState(null) // { type: 'ok' | 'error', text }
+  const [message, setMessage] = useState(null) // { type, text }
   const fileInputRef = useRef(null)
 
-  const refresh = useCallback(async (d) => {
-    setAccounts(await getAccountsForDomain(d))
+  const patterns = config?.cookieNames
+
+  const loadScope = useCallback(async (s) => {
+    setConfig(await getDomainConfig(s))
+    setAccounts(await getAccountsForDomain(s))
   }, [])
 
   useEffect(() => {
     ;(async () => {
-      const { tab, domain } = await getActiveTabDomain()
+      const { tab, host, root } = await getActiveTab()
       setTab(tab)
-      setDomain(domain)
-      if (domain) {
-        setConfig(await getDomainConfig(domain))
-        await refresh(domain)
+      setHost(host)
+      setRoot(root)
+      if (host) {
+        // 在已保存的作用域里找与当前主机最匹配的；没有则默认主域名
+        const [accs, cfgs] = await Promise.all([getAllAccounts(), getAllConfigs()])
+        const keys = [...new Set([...Object.keys(accs), ...Object.keys(cfgs)])]
+        const s = bestMatch(keys, host) ?? root
+        setScope(s)
+        setScopeInput(s)
+        await loadScope(s)
       }
     })()
-  }, [refresh])
+  }, [loadScope])
 
   function notify(type, text) {
     setMessage({ type, text })
@@ -57,7 +71,15 @@ export default function App() {
     }
   }
 
-  const patterns = config?.cookieNames
+  const commitScope = (raw) =>
+    run(async () => {
+      const s = (raw ?? scopeInput).trim() || root
+      setScopeInput(s)
+      if (s === scope) return
+      setScope(s)
+      setShowSettings(false)
+      await loadScope(s)
+    })
 
   const handleSave = () =>
     run(async () => {
@@ -66,30 +88,30 @@ export default function App() {
         notify('error', '请先输入账号备注名')
         return
       }
-      const cookies = await getDomainCookies(domain, patterns)
+      const cookies = await getDomainCookies(scope, patterns)
       if (cookies.length === 0) {
-        notify('error', patterns?.length ? '没匹配到要管理的 Cookie，检查⚙设置或是否已登录' : '当前域名下没有 Cookie，可能尚未登录')
+        notify('error', patterns?.length ? '没匹配到要管理的 Cookie，检查⚙设置或是否已登录' : '当前作用域下没有 Cookie，可能尚未登录')
         return
       }
-      await saveAccount(domain, name, cookies)
+      await saveAccount(scope, name, cookies)
       setNewName('')
-      await refresh(domain)
+      await loadScope(scope)
       notify('ok', `已保存「${name}」（${cookies.length} 条 Cookie）`)
     })
 
   const handleSwitch = (account) =>
     run(async () => {
-      const failed = await applyAccount(domain, account.cookies, patterns)
-      await refresh(domain)
+      const failed = await applyAccount(scope, account.cookies, patterns)
+      await loadScope(scope)
       if (tab?.id) await chrome.tabs.reload(tab.id)
       notify('ok', failed > 0 ? `已切换，但 ${failed} 条 Cookie 写入失败` : `已切换到「${account.name}」`)
     })
 
   const handleUpdate = (account) =>
     run(async () => {
-      const cookies = await getDomainCookies(domain, patterns)
-      await updateAccountCookies(domain, account.id, cookies)
-      await refresh(domain)
+      const cookies = await getDomainCookies(scope, patterns)
+      await updateAccountCookies(scope, account.id, cookies)
+      await loadScope(scope)
       notify('ok', `已用当前登录态覆盖「${account.name}」（${cookies.length} 条）`)
     })
 
@@ -97,27 +119,27 @@ export default function App() {
     run(async () => {
       const name = prompt('新的备注名：', account.name)?.trim()
       if (!name || name === account.name) return
-      await renameAccount(domain, account.id, name)
-      await refresh(domain)
+      await renameAccount(scope, account.id, name)
+      await loadScope(scope)
     })
 
   const handleDelete = (account) =>
     run(async () => {
       if (!confirm(`确定删除「${account.name}」吗？`)) return
-      await deleteAccount(domain, account.id)
-      await refresh(domain)
+      await deleteAccount(scope, account.id)
+      await loadScope(scope)
       notify('ok', '已删除')
     })
 
   const handleExport = (onlyCurrent) =>
     run(async () => {
-      const json = await exportAccounts(onlyCurrent ? domain : null)
+      const json = await exportAccounts(onlyCurrent ? scope : null)
       const blob = new Blob([json], { type: 'application/json' })
       const url = URL.createObjectURL(blob)
       const a = document.createElement('a')
       a.href = url
       a.download = onlyCurrent
-        ? `accounts-${domain}-${Date.now()}.json`
+        ? `accounts-${scope}-${Date.now()}.json`
         : `accounts-all-${Date.now()}.json`
       a.click()
       URL.revokeObjectURL(url)
@@ -131,12 +153,12 @@ export default function App() {
     run(async () => {
       const text = await file.text()
       const count = await importAccounts(text)
-      if (domain) await refresh(domain)
+      await loadScope(scope)
       notify('ok', `成功导入 ${count} 个账号`)
     })
   }
 
-  if (domain === null) {
+  if (host === null) {
     return (
       <div className="app">
         <header className="header">
@@ -147,12 +169,28 @@ export default function App() {
     )
   }
 
+  // 建议的快捷作用域
+  const suggestions = [...new Set([root, host, `*.${root}`])]
+
   return (
     <div className="app">
       <header className="header">
         <h1>账号切换助手</h1>
         <div className="header-right">
-          <span className="domain" title={domain}>{domain}</span>
+          <button
+            className="icon-btn"
+            title="打开管理页（作用域 / Cookie 组 / 账号）"
+            onClick={async () => {
+              try {
+                await chrome.runtime.openOptionsPage()
+              } catch {
+                // 旧版 manifest 未注册 options 页时直接按 URL 打开
+                await chrome.tabs.create({ url: chrome.runtime.getURL('src/options/index.html') })
+              }
+            }}
+          >
+            🗂
+          </button>
           <button
             className="icon-btn"
             title="设置要管理的 Cookie"
@@ -163,9 +201,38 @@ export default function App() {
         </div>
       </header>
 
+      <div className="scope-box">
+        <div className="scope-row">
+          <input
+            className="scope-input"
+            value={scopeInput}
+            placeholder="作用域通配，如 example.com 或 www-d.example.com"
+            onChange={(e) => setScopeInput(e.target.value)}
+            onKeyDown={(e) => e.key === 'Enter' && commitScope()}
+            onBlur={() => commitScope()}
+            disabled={busy}
+          />
+        </div>
+        <div className="scope-suggest">
+          {suggestions.map((s) => (
+            <button
+              key={s}
+              className={s === scope ? 'active' : ''}
+              onClick={() => commitScope(s)}
+              disabled={busy}
+            >
+              {s}
+            </button>
+          ))}
+          <span className="scope-hint" title={`实际读取 ${queryDomain(scope || root)} 下的 Cookie 后按通配过滤`}>
+            读取 {queryDomain(scope || root)}
+          </span>
+        </div>
+      </div>
+
       {showSettings ? (
         <CookieSettings
-          domain={domain}
+          domain={scope}
           config={config}
           onClose={() => setShowSettings(false)}
           onSaved={(names) => {
@@ -204,7 +271,7 @@ export default function App() {
 
           {accounts.length === 0 ? (
             <p className="empty">
-              还没有保存过 <b>{domain}</b> 的账号。
+              <b>{scope}</b> 还没有保存账号。
               <br />
               先在网页上登录，再点上方「保存当前账号」。
             </p>
@@ -239,7 +306,7 @@ export default function App() {
 
           <footer className="footer">
             <button onClick={() => handleExport(true)} disabled={busy || accounts.length === 0}>
-              导出本站
+              导出本范围
             </button>
             <button onClick={() => handleExport(false)} disabled={busy}>
               导出全部

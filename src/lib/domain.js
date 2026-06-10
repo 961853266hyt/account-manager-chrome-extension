@@ -30,18 +30,21 @@ export function getRootDomain(hostname) {
   return lastTwo
 }
 
-/** 从当前激活标签页拿到主域名，不支持的页面（chrome:// 等）返回 null */
-export async function getActiveTabDomain() {
+/**
+ * 从当前激活标签页拿到主机名与主域名。
+ * 不支持的页面（chrome:// 等）返回 host=null。
+ */
+export async function getActiveTab() {
   const [tab] = await chrome.tabs.query({ active: true, currentWindow: true })
-  if (!tab?.url) return { tab: tab ?? null, domain: null }
+  if (!tab?.url) return { tab: tab ?? null, host: null, root: null }
   let url
   try {
     url = new URL(tab.url)
   } catch {
-    return { tab, domain: null }
+    return { tab, host: null, root: null }
   }
   if (url.protocol !== 'http:' && url.protocol !== 'https:') {
-    return { tab, domain: null }
+    return { tab, host: null, root: null }
   }
-  return { tab, domain: getRootDomain(url.hostname) }
+  return { tab, host: url.hostname, root: getRootDomain(url.hostname) }
 }

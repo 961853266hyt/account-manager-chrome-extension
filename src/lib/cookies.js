@@ -1,3 +1,5 @@
+import { queryDomain, cookieInScope } from './pattern'
+
 // 根据 cookie 自身的 domain/path/secure 还原出可用于 set/remove 的 URL
 function cookieUrl(cookie) {
   const host = cookie.domain.startsWith('.') ? cookie.domain.slice(1) : cookie.domain
@@ -16,10 +18,10 @@ export function matchCookieName(name, patterns) {
   )
 }
 
-/** 读取主域名下的 Cookie（含各子域名、HttpOnly），按 patterns 过滤 */
-export async function getDomainCookies(rootDomain, patterns) {
-  const all = await chrome.cookies.getAll({ domain: rootDomain })
-  return all.filter((c) => matchCookieName(c.name, patterns))
+/** 读取作用域（通配模式）下的 Cookie（含 HttpOnly），再按 cookie 名 patterns 过滤 */
+export async function getDomainCookies(scope, namePatterns) {
+  const all = await chrome.cookies.getAll({ domain: queryDomain(scope) })
+  return all.filter((c) => cookieInScope(scope, c) && matchCookieName(c.name, namePatterns))
 }
 
 /** 删除指定的一组 Cookie */
@@ -65,15 +67,17 @@ export async function restoreCookies(cookies) {
 }
 
 /**
- * 切换到目标账号：只清除「受管理」的 Cookie，再写回目标账号的 Cookie，
- * 不会动域名下其它无关 Cookie（分析/追踪等）。返回写入失败数量。
+ * 切换到目标账号：只清除作用域内「受管理」的 Cookie，再写回目标账号的 Cookie，
+ * 不会动作用域外或无关的 Cookie（分析/追踪等）。返回写入失败数量。
  */
-export async function applyAccount(rootDomain, targetCookies, patterns) {
-  const current = await chrome.cookies.getAll({ domain: rootDomain })
+export async function applyAccount(scope, targetCookies, namePatterns) {
+  const current = await chrome.cookies.getAll({ domain: queryDomain(scope) })
   const targetNames = new Set(targetCookies.map((c) => c.name))
-  // 清除：当前命中 patterns 的，或目标账号里存在的同名 Cookie（防配置漂移残留）
+  // 清除：作用域内、且命中名单或目标账号里存在的同名 Cookie（防配置漂移残留）
   const toRemove = current.filter(
-    (c) => matchCookieName(c.name, patterns) || targetNames.has(c.name),
+    (c) =>
+      cookieInScope(scope, c) &&
+      (matchCookieName(c.name, namePatterns) || targetNames.has(c.name)),
   )
   await removeCookies(toRemove)
   return restoreCookies(targetCookies)

@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { setCookieNames } from '../lib/domain-config'
+import { queryDomain, cookieInScope } from '../lib/pattern'
 
 // 启发式：HttpOnly 或名字像登录态的，默认推荐勾选
 const AUTH_RE = /sess|auth|token|sid|login|uid|user|csrf|jwt|account|secure|remember|passport|ticket/i
@@ -15,7 +16,8 @@ export default function CookieSettings({ domain, config, onSaved, onClose }) {
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
-    chrome.cookies.getAll({ domain }).then((list) => {
+    chrome.cookies.getAll({ domain: queryDomain(domain) }).then((all) => {
+      const list = all.filter((c) => cookieInScope(domain, c))
       // 按名字去重并排序
       const byName = [...new Map(list.map((c) => [c.name, c])).values()].sort(
         (a, b) => a.name.localeCompare(b.name),
