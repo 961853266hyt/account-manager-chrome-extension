@@ -67,6 +67,21 @@ export async function restoreCookies(cookies) {
 }
 
 /**
+ * 启发式判断当前登录态对应哪个已存账号：受管理 Cookie 的 name→value
+ * 与某账号完全一致即视为「当前」。返回账号 id 或 null。
+ */
+export async function detectActiveAccount(scope, accounts, namePatterns) {
+  if (!accounts?.length) return null
+  const current = await getDomainCookies(scope, namePatterns)
+  if (current.length === 0) return null
+  const values = new Map(current.map((c) => [c.name, c.value]))
+  const hit = accounts.find(
+    (a) => a.cookies.length > 0 && a.cookies.every((c) => values.get(c.name) === c.value),
+  )
+  return hit?.id ?? null
+}
+
+/**
  * 切换到目标账号：只清除作用域内「受管理」的 Cookie，再写回目标账号的 Cookie，
  * 不会动作用域外或无关的 Cookie（分析/追踪等）。返回写入失败数量。
  */

@@ -1,6 +1,10 @@
 import { useEffect, useState } from 'react'
+import { X, Sparkles, Plus } from 'lucide-react'
 import { setCookieNames } from '../lib/domain-config'
 import { queryDomain, cookieInScope } from '../lib/pattern'
+import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
+import { Badge } from '@/components/ui/badge'
 
 // 启发式：HttpOnly 或名字像登录态的，默认推荐勾选
 const AUTH_RE = /sess|auth|token|sid|login|uid|user|csrf|jwt|account|secure|remember|passport|ticket/i
@@ -18,9 +22,8 @@ export default function CookieSettings({ domain, config, onSaved, onClose }) {
   useEffect(() => {
     chrome.cookies.getAll({ domain: queryDomain(domain) }).then((all) => {
       const list = all.filter((c) => cookieInScope(domain, c))
-      // 按名字去重并排序
-      const byName = [...new Map(list.map((c) => [c.name, c])).values()].sort(
-        (a, b) => a.name.localeCompare(b.name),
+      const byName = [...new Map(list.map((c) => [c.name, c])).values()].sort((a, b) =>
+        a.name.localeCompare(b.name),
       )
       setCookies(byName)
       if (config?.cookieNames?.length) {
@@ -62,78 +65,103 @@ export default function CookieSettings({ domain, config, onSaved, onClose }) {
   const total = selected.size + extras.length
 
   return (
-    <div className="settings">
-      <div className="settings-head">
-        <strong>选择要管理的 Cookie</strong>
-        <button onClick={onClose}>关闭</button>
+    <div className="space-y-3">
+      <div className="flex items-center justify-between">
+        <div>
+          <p className="text-[13px] font-semibold">选择要管理的 Cookie</p>
+          <p className="mt-0.5 text-[11px] leading-relaxed text-muted-foreground">
+            只保存 / 切换选中的（通常是登录态那几个），全不选 = 全部
+          </p>
+        </div>
+        <Button variant="ghost" size="icon-sm" title="关闭" onClick={onClose}>
+          <X />
+        </Button>
       </div>
-      <p className="settings-hint">
-        只保存 / 切换这里选中的 Cookie（一般是登录态相关的几个），不碰分析、追踪类 Cookie。全部不选则保存全部。
-      </p>
 
       {loading ? (
-        <p className="empty">读取当前 Cookie…</p>
+        <p className="py-8 text-center text-xs text-muted-foreground">读取当前 Cookie…</p>
       ) : (
         <>
-          <div className="cookie-actions">
-            <button onClick={() => setSelected(new Set(cookies.map((c) => c.name)))}>
+          <div className="flex gap-1.5">
+            <Button variant="outline" size="sm" className="flex-1"
+              onClick={() => setSelected(new Set(cookies.filter(isLikelyAuth).map((c) => c.name)))}>
+              <Sparkles /> 智能推荐
+            </Button>
+            <Button variant="outline" size="sm" className="flex-1"
+              onClick={() => setSelected(new Set(cookies.map((c) => c.name)))}>
               全选
-            </button>
-            <button onClick={() => setSelected(new Set())}>清空</button>
-            <button
-              onClick={() =>
-                setSelected(new Set(cookies.filter(isLikelyAuth).map((c) => c.name)))
-              }
-            >
-              智能推荐
-            </button>
+            </Button>
+            <Button variant="outline" size="sm" className="flex-1" onClick={() => setSelected(new Set())}>
+              清空
+            </Button>
           </div>
 
-          <ul className="cookie-list">
-            {cookies.length === 0 && <li className="empty">当前域名下没有 Cookie</li>}
+          <ul className="max-h-56 divide-y overflow-y-auto rounded-lg border">
+            {cookies.length === 0 && (
+              <li className="px-3 py-5 text-center text-xs text-muted-foreground">
+                当前作用域下没有 Cookie
+              </li>
+            )}
             {cookies.map((c) => (
               <li key={c.name}>
-                <label>
+                <label className="flex cursor-pointer items-center gap-2.5 px-3 py-2 transition-colors hover:bg-accent/50">
                   <input
                     type="checkbox"
+                    className="size-3.5 shrink-0 accent-primary"
                     checked={selected.has(c.name)}
                     onChange={() => toggle(c.name)}
                   />
-                  <span className="cookie-name" title={c.name}>
+                  <span className="min-w-0 flex-1 truncate font-mono text-xs" title={c.name}>
                     {c.name}
                   </span>
-                  {c.httpOnly && <span className="badge">HttpOnly</span>}
+                  {c.httpOnly && (
+                    <Badge variant="secondary" className="shrink-0 px-1.5 text-[10px]">
+                      HttpOnly
+                    </Badge>
+                  )}
                 </label>
               </li>
             ))}
           </ul>
 
           {extras.length > 0 && (
-            <div className="chips">
+            <div className="flex flex-wrap gap-1.5">
               {extras.map((p) => (
-                <span key={p} className="chip">
+                <Badge key={p} variant="secondary" className="font-mono">
                   {p}
-                  <button onClick={() => setExtras((e) => e.filter((x) => x !== p))}>
-                    ×
+                  <button
+                    className="ml-0.5 cursor-pointer opacity-60 hover:opacity-100"
+                    onClick={() => setExtras((e) => e.filter((x) => x !== p))}
+                    title="移除"
+                  >
+                    <X className="size-3" />
                   </button>
-                </span>
+                </Badge>
               ))}
             </div>
           )}
 
-          <div className="custom-row">
-            <input
-              placeholder="手动添加名字，支持前缀通配 如 __Secure-*"
+          <form
+            className="flex gap-1.5"
+            onSubmit={(e) => {
+              e.preventDefault()
+              addCustom()
+            }}
+          >
+            <Input
+              className="h-8 flex-1 font-mono text-xs"
+              placeholder="手动添加，支持前缀通配 如 __Secure-*"
               value={custom}
               onChange={(e) => setCustom(e.target.value)}
-              onKeyDown={(e) => e.key === 'Enter' && addCustom()}
             />
-            <button onClick={addCustom}>添加</button>
-          </div>
+            <Button type="submit" variant="outline" size="sm" disabled={!custom.trim()}>
+              <Plus /> 添加
+            </Button>
+          </form>
 
-          <button className="primary settings-save" onClick={save}>
+          <Button className="w-full" onClick={save}>
             保存设置（{total > 0 ? `${total} 项` : '全部'}）
-          </button>
+          </Button>
         </>
       )}
     </div>

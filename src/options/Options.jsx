@@ -15,6 +15,8 @@ import {
 import {
   Dialog, DialogContent, DialogHeader, DialogFooter, DialogTitle, DialogDescription, DialogClose,
 } from '@/components/ui/dialog'
+import { Toast } from '@/components/toast'
+import { NameDialog } from '@/components/name-dialog'
 
 // 把逗号 / 空格 / 换行分隔的输入解析成 Cookie 名列表
 function parseNames(text) {
@@ -151,9 +153,12 @@ export default function Options() {
         }
       />
 
-      <RenameAccountDialog
-        target={renameTarget}
+      <NameDialog
+        open={!!renameTarget}
         onOpenChange={(open) => !open && setRenameTarget(null)}
+        title="重命名账号"
+        description={renameTarget ? `${renameTarget.pattern} 下的「${renameTarget.account.name}」` : ''}
+        initialName={renameTarget?.account.name ?? ''}
         busy={busy}
         onSubmit={(name) =>
           run(async () => {
@@ -165,17 +170,7 @@ export default function Options() {
         }
       />
 
-      {message && (
-        <div
-          className={`fixed bottom-6 left-1/2 z-50 -translate-x-1/2 rounded-lg border px-4 py-2.5 text-sm font-medium shadow-lg ${
-            message.type === 'ok'
-              ? 'border-transparent bg-primary text-primary-foreground'
-              : 'border-transparent bg-destructive text-white'
-          }`}
-        >
-          {message.text}
-        </div>
-      )}
+      <Toast message={message} className="bottom-6" />
     </div>
   )
 }
@@ -431,46 +426,3 @@ function NewScopeDialog({ open, onOpenChange, busy, onSubmit }) {
   )
 }
 
-function RenameAccountDialog({ target, onOpenChange, busy, onSubmit }) {
-  const [name, setName] = useState('')
-
-  useEffect(() => {
-    if (target) setName(target.account.name)
-  }, [target])
-
-  const submit = (e) => {
-    e.preventDefault()
-    const v = name.trim()
-    if (!v) return
-    onSubmit(v)
-  }
-
-  return (
-    <Dialog open={!!target} onOpenChange={onOpenChange}>
-      <DialogContent>
-        <form onSubmit={submit} className="grid gap-4">
-          <DialogHeader>
-            <DialogTitle>重命名账号</DialogTitle>
-            <DialogDescription>{target?.pattern} 下的「{target?.account.name}」</DialogDescription>
-          </DialogHeader>
-          <div className="grid gap-2">
-            <Label htmlFor="ra-name">备注名</Label>
-            <Input
-              id="ra-name"
-              value={name}
-              maxLength={30}
-              onChange={(e) => setName(e.target.value)}
-              autoFocus
-            />
-          </div>
-          <DialogFooter>
-            <DialogClose asChild>
-              <Button type="button" variant="outline">取消</Button>
-            </DialogClose>
-            <Button type="submit" disabled={busy || !name.trim()}>保存</Button>
-          </DialogFooter>
-        </form>
-      </DialogContent>
-    </Dialog>
-  )
-}
