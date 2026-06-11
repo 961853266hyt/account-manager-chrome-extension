@@ -10,9 +10,6 @@ import { Label } from '@/components/ui/label'
 import { Badge } from '@/components/ui/badge'
 import { Card, CardHeader, CardContent } from '@/components/ui/card'
 import {
-  Table, TableHeader, TableBody, TableRow, TableHead, TableCell,
-} from '@/components/ui/table'
-import {
   Dialog, DialogContent, DialogHeader, DialogFooter, DialogTitle, DialogDescription, DialogClose,
 } from '@/components/ui/dialog'
 import { Toast } from '@/components/toast'
@@ -115,7 +112,7 @@ export default function Options() {
       </header>
 
       {scopes.length === 0 ? (
-        <Card>
+        <Card className="border-0 shadow-md ring-1 ring-border/60">
           <CardContent className="py-14 text-center text-sm text-muted-foreground">
             还没有任何作用域。点右上角「新增作用域」创建，
             <br />
@@ -209,8 +206,8 @@ function ScopeCard({ scope, busy, run, reload, notify, download, onRenameAccount
     })
 
   return (
-    <Card>
-      <CardHeader className="flex-row items-center justify-between space-y-0 border-b pb-4">
+    <Card className="border-0 shadow-md ring-1 ring-border/60">
+      <CardHeader className="flex-row items-center justify-between space-y-0">
         <form className="flex flex-1 items-center gap-2" onSubmit={savePattern}>
           <Globe className="size-4 shrink-0 text-muted-foreground" />
           <Input
@@ -297,56 +294,48 @@ function ScopeCard({ scope, busy, run, reload, notify, download, onRenameAccount
             Profile（{scope.accounts.length}）
           </Label>
           {scope.accounts.length === 0 ? (
-            <p className="rounded-md border border-dashed px-4 py-5 text-center text-sm text-muted-foreground">
+            <p className="rounded-xl bg-muted/40 px-4 py-6 text-center text-sm text-muted-foreground">
               该作用域下还没有账号——在匹配的网站上打开插件弹窗「保存当前账号」
             </p>
           ) : (
-            <div className="rounded-lg border">
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>备注名</TableHead>
-                    <TableHead>Cookie 数</TableHead>
-                    <TableHead className="text-right">操作</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {scope.accounts.map((acc) => (
-                    <TableRow key={acc.id}>
-                      <TableCell className="font-medium">{acc.name}</TableCell>
-                      <TableCell>{acc.cookies.length}</TableCell>
-                      <TableCell>
-                        <div className="flex justify-end gap-1.5">
-                          <Button variant="outline" size="sm" disabled={busy}
-                            title="把该账号的 Cookie 写入浏览器"
-                            onClick={() => run(async () => {
-                              const failed = await applyAccount(scope.pattern, acc.cookies, scope.cookieNames)
-                              notify('ok', failed > 0 ? `已应用，${failed} 条失败。请刷新对应站点` : `已应用「${acc.name}」，请刷新对应站点`)
-                            })}>
-                            应用
-                          </Button>
-                          <Button variant="ghost" size="icon-sm" disabled={busy} title="改名"
-                            onClick={() => onRenameAccount(acc)}>
-                            <Pencil />
-                          </Button>
-                          <Button variant="ghost" size="icon-sm" disabled={busy} title="删除"
-                            className="text-destructive hover:text-destructive"
-                            onClick={() => {
-                              if (!confirm(`删除账号「${acc.name}」？`)) return
-                              run(async () => {
-                                await deleteAccount(scope.pattern, acc.id)
-                                await reload()
-                                notify('ok', '已删除账号')
-                              })
-                            }}>
-                            <Trash2 />
-                          </Button>
-                        </div>
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
+            <div className="space-y-2.5">
+              {scope.accounts.map((acc) => (
+                <div
+                  key={acc.id}
+                  className="flex items-center justify-between gap-3 rounded-xl bg-card px-4 py-3 shadow-sm ring-1 ring-border/60 transition-shadow hover:shadow-md"
+                >
+                  <div className="min-w-0">
+                    <p className="truncate font-medium">{acc.name}</p>
+                    <p className="mt-0.5 text-xs text-muted-foreground">{acc.cookies.length} 个 Cookie</p>
+                  </div>
+                  <div className="flex shrink-0 items-center gap-1.5">
+                    <Button variant="outline" size="sm" disabled={busy}
+                      title="把该账号的 Cookie 写入浏览器"
+                      onClick={() => run(async () => {
+                        const failed = await applyAccount(scope.pattern, acc.cookies, scope.cookieNames)
+                        notify('ok', failed > 0 ? `已应用，${failed} 条失败。请刷新对应站点` : `已应用「${acc.name}」，请刷新对应站点`)
+                      })}>
+                      应用
+                    </Button>
+                    <Button variant="ghost" size="icon-sm" disabled={busy} title="改名"
+                      onClick={() => onRenameAccount(acc)}>
+                      <Pencil />
+                    </Button>
+                    <Button variant="ghost" size="icon-sm" disabled={busy} title="删除"
+                      className="text-destructive hover:text-destructive"
+                      onClick={() => {
+                        if (!confirm(`删除账号「${acc.name}」？`)) return
+                        run(async () => {
+                          await deleteAccount(scope.pattern, acc.id)
+                          await reload()
+                          notify('ok', '已删除账号')
+                        })
+                      }}>
+                      <Trash2 />
+                    </Button>
+                  </div>
+                </div>
+              ))}
             </div>
           )}
         </section>
