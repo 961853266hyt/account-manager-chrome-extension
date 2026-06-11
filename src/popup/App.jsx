@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react'
-import { Settings2, Plus, Globe } from 'lucide-react'
+import { Settings, Globe } from 'lucide-react'
 import { getActiveTab } from '../lib/domain'
 import { getDomainCookies, applyAccount, detectActiveAccount } from '../lib/cookies'
 import { getDomainConfig, getAllConfigs } from '../lib/domain-config'
@@ -183,7 +183,7 @@ export default function App() {
           <div className="mb-2.5 flex items-center justify-between">
             <h1 className="text-sm font-semibold tracking-tight">SessionHop</h1>
             <Button variant="ghost" size="icon-sm" title="打开管理页" onClick={openOptions}>
-              <Settings2 />
+              <Settings />
             </Button>
           </div>
 
@@ -296,20 +296,9 @@ export default function App() {
                 disabled={busy}
               />
               <Button type="submit" disabled={busy || !newName.trim()}>
-                <Plus /> 保存备注
+                保存
               </Button>
             </form>
-            <div className="mt-2 flex items-center justify-between">
-              <span className="text-[11px] text-muted-foreground">
-                {accounts.length > 0 ? `${accounts.length} 个账号` : '登录后保存即可一键切换'}
-              </span>
-              <button
-                className="cursor-pointer text-[11px] text-muted-foreground underline-offset-2 hover:text-foreground hover:underline"
-                onClick={openOptions}
-              >
-                管理页 →
-              </button>
-            </div>
           </div>
         )}
       </div>
