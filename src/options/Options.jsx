@@ -1,9 +1,8 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { Plus, Download, Upload, Trash2, Pencil, Check, X, Globe, Cookie } from 'lucide-react'
-import { listScopes, createScope, renameScope, deleteScope } from '../lib/scopes'
+import { Plus, Download, Upload, Trash2, Pencil, Check, X, Globe, Cookie, FileJson, ClipboardPaste, ClipboardCopy } from 'lucide-react'
+import { listScopes, createScope, renameScope, deleteScope, importPreset } from '../lib/scopes'
 import { setCookieNames } from '../lib/domain-config'
-import { applyAccount } from '../lib/cookies'
-import { renameAccount, deleteAccount, exportAccounts, importAccounts } from '../lib/storage'
+import { renameAccount, updateAccountCookies, deleteAccount, exportAccounts, importAccounts } from '../lib/storage'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -13,8 +12,11 @@ import { Card, CardHeader, CardContent } from '@/components/ui/card'
 import {
   Dialog, DialogContent, DialogHeader, DialogFooter, DialogTitle, DialogDescription, DialogClose,
 } from '@/components/ui/dialog'
+import {
+  DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem,
+} from '@/components/ui/dropdown-menu'
 import { Toast } from '@/components/toast'
-import { NameDialog } from '@/components/name-dialog'
+import { EditAccountDialog } from '@/components/edit-account-dialog'
 
 // 把逗号 / 空格 / 换行分隔的输入解析成 Cookie 名列表
 function parseNames(text) {
@@ -34,7 +36,7 @@ export default function Options() {
   const [busy, setBusy] = useState(false)
   const [message, setMessage] = useState(null)
   const [newOpen, setNewOpen] = useState(false)
-  const [renameTarget, setRenameTarget] = useState(null) // { pattern, account }
+  const [editTarget, setEditTarget] = useState(null) // { pattern, account }
   const fileInputRef = useRef(null)
 
   const reload = useCallback(async () => {
@@ -72,39 +74,93 @@ export default function Options() {
     URL.revokeObjectURL(url)
   }
 
+  const copyToClipboard = async (text) => {
+    try {
+      await navigator.clipboard.writeText(text)
+    } catch {
+      throw new Error('无法写入剪贴板，请检查浏览器权限')
+    }
+  }
+
+  // 团队预设（含 scopes 字段）走 importPreset，账号备份走 importAccounts
+  const importText = async (text) => {
+    let parsed
+    try {
+      parsed = JSON.parse(text)
+    } catch {
+      throw new Error('不是有效的 JSON')
+    }
+    if (Array.isArray(parsed?.scopes)) {
+      const { created, skipped } = await importPreset(text)
+      await reload()
+      notify('ok', `预设已导入：新建 ${created} 个作用域${skipped ? `，跳过 ${skipped} 个已存在` : ''}`)
+    } else {
+      const count = await importAccounts(text)
+      await reload()
+      notify('ok', `成功导入 ${count} 个账号`)
+    }
+  }
+
   const onImportFile = (e) => {
     const file = e.target.files?.[0]
     e.target.value = ''
     if (!file) return
-    run(async () => {
-      const count = await importAccounts(await file.text())
-      await reload()
-      notify('ok', `成功导入 ${count} 个账号`)
-    })
+    run(async () => importText(await file.text()))
   }
 
-  const totalAccounts = scopes.reduce((n, s) => n + s.accounts.length, 0)
+  const onImportClipboard = () =>
+    run(async () => {
+      let text
+      try {
+        text = await navigator.clipboard.readText()
+      } catch {
+        throw new Error('无法读取剪贴板，请检查浏览器权限')
+      }
+      if (!text.trim()) throw new Error('剪贴板是空的')
+      await importText(text)
+    })
 
   return (
     <div className="mx-auto max-w-4xl px-5 py-10">
-      <header className="mb-8 flex flex-wrap items-end justify-between gap-4">
-        <div>
-          <h1 className="text-2xl font-semibold tracking-tight">账号切换助手 · 管理</h1>
-          <p className="mt-1 text-sm text-muted-foreground">
-            {scopes.length} 个作用域 · {totalAccounts} 个账号
-          </p>
-        </div>
+      <header className="mb-8 flex flex-wrap items-center justify-between gap-4">
+        <h1 className="text-2xl font-semibold tracking-tight">设置</h1>
         <div className="flex gap-2">
-          <Button variant="outline" disabled={busy}
-            onClick={() => run(async () => {
-              download(await exportAccounts(null), `accounts-all-${Date.now()}.json`)
-              notify('ok', '已导出全部')
-            })}>
-            <Upload /> 导出全部
-          </Button>
-          <Button variant="outline" disabled={busy} onClick={() => fileInputRef.current?.click()}>
-            <Download /> 导入 JSON
-          </Button>
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="outline" disabled={busy}>
+                <Upload /> 导出全部
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end">
+              <DropdownMenuItem onSelect={() => run(async () => {
+                download(await exportAccounts(null), `accounts-all-${Date.now()}.json`)
+                notify('ok', '已导出全部')
+              })}>
+                <FileJson /> 下载文件
+              </DropdownMenuItem>
+              <DropdownMenuItem onSelect={() => run(async () => {
+                await copyToClipboard(await exportAccounts(null))
+                notify('ok', '已复制到剪贴板')
+              })}>
+                <ClipboardCopy /> 复制到剪贴板
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="outline" disabled={busy}>
+                <Download /> 导入
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end">
+              <DropdownMenuItem onSelect={() => fileInputRef.current?.click()}>
+                <FileJson /> 从文件
+              </DropdownMenuItem>
+              <DropdownMenuItem onSelect={onImportClipboard}>
+                <ClipboardPaste /> 从剪贴板
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
           <input ref={fileInputRef} type="file" accept="application/json,.json" hidden onChange={onImportFile} />
           <Button disabled={busy} onClick={() => setNewOpen(true)}>
             <Plus /> 新增作用域
@@ -131,7 +187,7 @@ export default function Options() {
               reload={reload}
               notify={notify}
               download={download}
-              onRenameAccount={(account) => setRenameTarget({ pattern: scope.pattern, account })}
+              onEditAccount={(account) => setEditTarget({ pattern: scope.pattern, account })}
             />
           ))}
         </div>
@@ -151,19 +207,20 @@ export default function Options() {
         }
       />
 
-      <NameDialog
-        open={!!renameTarget}
-        onOpenChange={(open) => !open && setRenameTarget(null)}
-        title="重命名账号"
-        description={renameTarget ? `${renameTarget.pattern} 下的「${renameTarget.account.name}」` : ''}
-        initialName={renameTarget?.account.name ?? ''}
+      <EditAccountDialog
+        open={!!editTarget}
+        onOpenChange={(open) => !open && setEditTarget(null)}
+        account={editTarget?.account ?? null}
+        scope={editTarget?.pattern ?? ''}
         busy={busy}
-        onSubmit={(name) =>
+        onSubmit={(name, cookies) =>
           run(async () => {
-            await renameAccount(renameTarget.pattern, renameTarget.account.id, name)
+            const { pattern, account } = editTarget
+            if (name !== account.name) await renameAccount(pattern, account.id, name)
+            await updateAccountCookies(pattern, account.id, cookies)
             await reload()
-            setRenameTarget(null)
-            notify('ok', '已改名')
+            setEditTarget(null)
+            notify('ok', '已保存')
           })
         }
       />
@@ -173,7 +230,7 @@ export default function Options() {
   )
 }
 
-function ScopeCard({ scope, busy, run, reload, notify, download, onRenameAccount }) {
+function ScopeCard({ scope, busy, run, reload, notify, download, onEditAccount }) {
   const [patternDraft, setPatternDraft] = useState(scope.pattern)
   const [cookieInput, setCookieInput] = useState('')
   const dirty = patternDraft.trim().toLowerCase() !== scope.pattern
@@ -305,27 +362,29 @@ function ScopeCard({ scope, busy, run, reload, notify, download, onRenameAccount
               {scope.accounts.map((acc) => (
                 <div
                   key={acc.id}
-                  className="flex items-center justify-between gap-3 rounded-xl bg-card px-4 py-3 shadow-sm ring-1 ring-border/60 transition-shadow hover:shadow-md"
+                  role="button"
+                  tabIndex={0}
+                  onClick={() => !busy && onEditAccount(acc)}
+                  onKeyDown={(e) => {
+                    if ((e.key === 'Enter' || e.key === ' ') && !busy) {
+                      e.preventDefault()
+                      onEditAccount(acc)
+                    }
+                  }}
+                  className="flex cursor-pointer items-center justify-between gap-3 rounded-xl bg-card px-4 py-3 shadow-sm ring-1 ring-border/60 transition-shadow hover:shadow-md"
                 >
                   <div className="min-w-0">
                     <p className="truncate font-medium">{acc.name}</p>
                   </div>
                   <div className="flex shrink-0 items-center gap-1.5">
-                    <Button variant="outline" size="sm" disabled={busy}
-                      title="把该账号的 Cookie 写入浏览器"
-                      onClick={() => run(async () => {
-                        const failed = await applyAccount(scope.pattern, acc.cookies, scope.cookieNames)
-                        notify('ok', failed > 0 ? `已应用，${failed} 条失败。请刷新对应站点` : `已应用「${acc.name}」，请刷新对应站点`)
-                      })}>
-                      应用
-                    </Button>
-                    <Button variant="ghost" size="icon-sm" disabled={busy} title="改名"
-                      onClick={() => onRenameAccount(acc)}>
+                    <Button variant="ghost" size="icon-sm" disabled={busy} title="编辑"
+                      onClick={(e) => { e.stopPropagation(); onEditAccount(acc) }}>
                       <Pencil />
                     </Button>
                     <Button variant="ghost" size="icon-sm" disabled={busy} title="删除"
                       className="text-destructive hover:text-destructive"
-                      onClick={() => {
+                      onClick={(e) => {
+                        e.stopPropagation()
                         if (!confirm(`删除账号「${acc.name}」？`)) return
                         run(async () => {
                           await deleteAccount(scope.pattern, acc.id)

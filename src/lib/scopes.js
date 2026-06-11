@@ -26,6 +26,43 @@ export async function createScope(pattern, cookieNames = []) {
   await chrome.storage.local.set({ [C]: configs })
 }
 
+/**
+ * 导入团队预设：批量创建作用域（仅域名通配 + Cookie 组，不含任何账号数据）。
+ * 已存在的作用域跳过、不覆盖成员自己的数据。返回 { created, skipped }。
+ */
+export async function importPreset(jsonText) {
+  let parsed
+  try {
+    parsed = JSON.parse(jsonText)
+  } catch {
+    throw new Error('不是有效的 JSON 文件')
+  }
+  const list = parsed?.scopes
+  if (!Array.isArray(list)) {
+    throw new Error('文件格式不正确，缺少 scopes 字段')
+  }
+  const d = await chrome.storage.local.get([A, C])
+  const accounts = d[A] ?? {}
+  const configs = d[C] ?? {}
+  let created = 0
+  let skipped = 0
+  for (const s of list) {
+    const pattern = typeof s?.pattern === 'string' ? s.pattern.trim().toLowerCase() : ''
+    if (!pattern) continue
+    if (accounts[pattern] || configs[pattern]) {
+      skipped += 1
+      continue
+    }
+    const names = Array.isArray(s.cookieNames)
+      ? [...new Set(s.cookieNames.map((n) => String(n).trim()).filter(Boolean))]
+      : []
+    configs[pattern] = { cookieNames: names }
+    created += 1
+  }
+  await chrome.storage.local.set({ [C]: configs })
+  return { created, skipped }
+}
+
 /** 重命名作用域（域名通配模式）。目标已存在时合并 profile，配置保留目标原有的 */
 export async function renameScope(oldKey, newKeyRaw) {
   const newKey = newKeyRaw.trim()
