@@ -230,12 +230,12 @@ function ScopeCard({ scope, busy, run, reload, notify, download, onRenameAccount
           )}
         </form>
         <div className="flex shrink-0 gap-2">
-          <Button variant="outline" size="sm" disabled={busy || scope.accounts.length === 0}
+          <Button size="sm" disabled={busy || scope.accounts.length === 0}
             onClick={() => run(async () => {
               download(await exportAccounts(scope.pattern), `accounts-${scope.pattern}-${Date.now()}.json`)
               notify('ok', '已导出')
             })}>
-            <Download /> 导出
+            <Upload /> 导出
           </Button>
           <Button variant="destructive" size="sm" disabled={busy}
             onClick={() => {
@@ -282,7 +282,7 @@ function ScopeCard({ scope, busy, run, reload, notify, download, onRenameAccount
                 onChange={(e) => setCookieInput(e.target.value)}
                 disabled={busy}
               />
-              <Button type="submit" variant="outline" size="sm" disabled={busy || !cookieInput.trim()}>
+              <Button type="submit" size="sm" disabled={busy || !cookieInput.trim()}>
                 <Plus /> 添加
               </Button>
             </form>
