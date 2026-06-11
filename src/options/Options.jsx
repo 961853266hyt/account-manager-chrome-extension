@@ -396,9 +396,6 @@ function NewScopeDialog({ open, onOpenChange, busy, onSubmit }) {
               autoFocus
             />
             {error && <p className="text-xs text-destructive">{error}</p>}
-            <p className="text-xs text-muted-foreground">
-              `example.com` 整站含子域名 · `www-d.example.com` 仅该主机 · `*-d.example.com` 所有测试子域
-            </p>
           </div>
           <div className="grid gap-2">
             <Label htmlFor="ns-names">Cookie 组（可选）</Label>

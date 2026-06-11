@@ -69,9 +69,6 @@ export default function CookieSettings({ domain, config, onSaved, onClose }) {
       <div className="flex items-center justify-between">
         <div>
           <p className="text-[13px] font-semibold">选择要管理的 Cookie</p>
-          <p className="mt-0.5 text-[11px] leading-relaxed text-muted-foreground">
-            只保存 / 切换选中的（通常是登录态那几个），全不选 = 全部
-          </p>
         </div>
         <Button variant="ghost" size="icon-sm" title="关闭" onClick={onClose}>
           <X />
