@@ -8,6 +8,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Badge } from '@/components/ui/badge'
+import { HelpPopover } from '@/components/ui/help-popover'
 import { Card, CardHeader, CardContent } from '@/components/ui/card'
 import {
   Dialog, DialogContent, DialogHeader, DialogFooter, DialogTitle, DialogDescription, DialogClose,
@@ -256,6 +257,9 @@ function ScopeCard({ scope, busy, run, reload, notify, download, onRenameAccount
           <div className="mb-2 flex items-center gap-2">
             <Cookie className="size-4 text-muted-foreground" />
             <Label className="text-xs text-muted-foreground">Cookie 组</Label>
+            <HelpPopover label="Cookie 名规则">
+              填写要管理的 Cookie 名，多个用 <code className="font-mono">,</code> 分隔；支持 <code className="font-mono">前缀*</code> 通配，如 <code className="font-mono">__Secure-*</code>。留空表示管理全部 Cookie。
+            </HelpPopover>
             {scope.cookieNames.length === 0 && (
               <Badge variant="destructive">未设置 · 管理全部 Cookie</Badge>
             )}
@@ -277,7 +281,6 @@ function ScopeCard({ scope, busy, run, reload, notify, download, onRenameAccount
             <form className="flex items-center gap-2" onSubmit={addCookieNames}>
               <Input
                 className="h-8 w-56 font-mono text-xs"
-                placeholder="加 Cookie 名，支持 前缀* 和逗号分隔"
                 value={cookieInput}
                 onChange={(e) => setCookieInput(e.target.value)}
                 disabled={busy}
@@ -306,7 +309,6 @@ function ScopeCard({ scope, busy, run, reload, notify, download, onRenameAccount
                 >
                   <div className="min-w-0">
                     <p className="truncate font-medium">{acc.name}</p>
-                    <p className="mt-0.5 text-xs text-muted-foreground">{acc.cookies.length} 个 Cookie</p>
                   </div>
                   <div className="flex shrink-0 items-center gap-1.5">
                     <Button variant="outline" size="sm" disabled={busy}
