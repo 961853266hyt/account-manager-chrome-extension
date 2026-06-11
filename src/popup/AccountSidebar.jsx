@@ -121,7 +121,7 @@ export default function AccountSidebar({
                     <span className="min-w-0 flex-1">
                       <span className="flex items-center gap-1 text-[12px] font-medium leading-tight">
                         <span className="truncate">{acc.name}</span>
-                        {active && <span className="size-1.5 shrink-0 rounded-full bg-primary" />}
+                        {active && <span className="size-1.5 shrink-0 rounded-full bg-green-600" />}
                       </span>
                       <span className="block text-[10px] text-muted-foreground">
                         {acc.cookies.length} 条 Cookie

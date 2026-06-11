@@ -19,7 +19,15 @@ export async function getDomainConfig(domain) {
 export async function setCookieNames(domain, names) {
   const all = await getAllConfigs()
   const cleaned = [...new Set((names ?? []).map((n) => n.trim()).filter(Boolean))]
-  all[domain] = { cookieNames: cleaned }
+  all[domain] = { ...all[domain], cookieNames: cleaned }
   await chrome.storage.local.set({ [KEY]: all })
   return cleaned
+}
+
+/** 设置某作用域的别名（label，单个）；留空则清除 */
+export async function setLabel(domain, label) {
+  const all = await getAllConfigs()
+  const cur = all[domain] ?? { cookieNames: [] }
+  all[domain] = { ...cur, label: label.trim() || undefined }
+  await chrome.storage.local.set({ [KEY]: all })
 }

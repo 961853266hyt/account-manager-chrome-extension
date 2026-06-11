@@ -10,6 +10,7 @@ export async function listScopes() {
   const keys = [...new Set([...Object.keys(accounts), ...Object.keys(configs)])].sort()
   return keys.map((pattern) => ({
     pattern,
+    label: configs[pattern]?.label ?? '',
     cookieNames: configs[pattern]?.cookieNames ?? [],
     accounts: accounts[pattern] ?? [],
   }))
@@ -56,7 +57,8 @@ export async function importPreset(jsonText) {
     const names = Array.isArray(s.cookieNames)
       ? [...new Set(s.cookieNames.map((n) => String(n).trim()).filter(Boolean))]
       : []
-    configs[pattern] = { cookieNames: names }
+    const label = typeof s.label === 'string' ? s.label.trim() : ''
+    configs[pattern] = { cookieNames: names, ...(label ? { label } : {}) }
     created += 1
   }
   await chrome.storage.local.set({ [C]: configs })

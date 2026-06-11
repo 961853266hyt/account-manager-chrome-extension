@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { Plus, Download, Upload, Trash2, Pencil, Check, X, Globe, Cookie, FileJson, ClipboardPaste, ClipboardCopy } from 'lucide-react'
 import { listScopes, createScope, renameScope, deleteScope, importPreset } from '../lib/scopes'
-import { setCookieNames } from '../lib/domain-config'
+import { setCookieNames, setLabel } from '../lib/domain-config'
 import { renameAccount, updateAccountCookies, deleteAccount, exportAccounts, importAccounts } from '../lib/storage'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -233,7 +233,18 @@ export default function Options() {
 function ScopeCard({ scope, busy, run, reload, notify, download, onEditAccount }) {
   const [patternDraft, setPatternDraft] = useState(scope.pattern)
   const [cookieInput, setCookieInput] = useState('')
+  const [editingLabel, setEditingLabel] = useState(false)
+  const [labelDraft, setLabelDraft] = useState(scope.label)
   const dirty = patternDraft.trim().toLowerCase() !== scope.pattern
+
+  const saveLabel = () => {
+    setEditingLabel(false)
+    if (labelDraft.trim() === scope.label) return
+    run(async () => {
+      await setLabel(scope.pattern, labelDraft)
+      await reload()
+    })
+  }
 
   const savePattern = (e) => {
     e.preventDefault()
@@ -266,27 +277,56 @@ function ScopeCard({ scope, busy, run, reload, notify, download, onEditAccount }
   return (
     <Card className="border-0 shadow-md ring-1 ring-border/60">
       <CardHeader className="flex-row items-center justify-between space-y-0">
-        <form className="flex flex-1 items-center gap-2" onSubmit={savePattern}>
-          <Globe className="size-4 shrink-0 text-muted-foreground" />
-          <Input
-            className="h-8 max-w-72 font-mono text-[13px]"
-            value={patternDraft}
-            onChange={(e) => setPatternDraft(e.target.value)}
-            disabled={busy}
-            aria-label="域名通配模式"
-          />
-          {dirty && (
-            <>
-              <Button type="submit" size="icon-sm" variant="outline" disabled={busy} title="保存通配">
-                <Check />
-              </Button>
-              <Button type="button" size="icon-sm" variant="ghost" disabled={busy} title="还原"
-                onClick={() => setPatternDraft(scope.pattern)}>
-                <X />
-              </Button>
-            </>
+        <div className="flex min-w-0 flex-1 items-center gap-2">
+          <form className="flex items-center gap-2" onSubmit={savePattern}>
+            <Globe className="size-4 shrink-0 text-muted-foreground" />
+            <Input
+              className="h-8 max-w-72 font-mono text-[13px]"
+              value={patternDraft}
+              onChange={(e) => setPatternDraft(e.target.value)}
+              disabled={busy}
+              aria-label="域名通配模式"
+            />
+            {dirty && (
+              <>
+                <Button type="submit" size="icon-sm" variant="outline" disabled={busy} title="保存通配">
+                  <Check />
+                </Button>
+                <Button type="button" size="icon-sm" variant="ghost" disabled={busy} title="还原"
+                  onClick={() => setPatternDraft(scope.pattern)}>
+                  <X />
+                </Button>
+              </>
+            )}
+          </form>
+          {editingLabel ? (
+            <Input
+              autoFocus
+              className="h-8 w-40 rounded-lg text-[13px]"
+              value={labelDraft}
+              maxLength={20}
+              placeholder="别名"
+              aria-label="作用域别名"
+              onChange={(e) => setLabelDraft(e.target.value)}
+              onBlur={saveLabel}
+              onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); e.currentTarget.blur() } }}
+            />
+          ) : (
+            <button
+              type="button"
+              disabled={busy}
+              title="点击编辑别名"
+              onClick={() => { setLabelDraft(scope.label); setEditingLabel(true) }}
+              className={
+                scope.label
+                  ? 'inline-flex shrink-0 items-center rounded-lg bg-secondary px-2.5 py-1 text-xs font-medium text-secondary-foreground transition-colors hover:bg-secondary/70'
+                  : 'inline-flex shrink-0 items-center rounded-lg bg-green-100 px-2.5 py-1 text-xs text-green-700 transition-colors hover:bg-green-200'
+              }
+            >
+              {scope.label || '+ 别名'}
+            </button>
           )}
-        </form>
+        </div>
         <div className="flex shrink-0 gap-2">
           <Button size="sm" disabled={busy || scope.accounts.length === 0}
             onClick={() => run(async () => {
